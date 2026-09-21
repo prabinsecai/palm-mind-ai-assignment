@@ -1,0 +1,5 @@
+Palm Mind AI develops AI-powered applications.
+The system uses retrieval augmented generation for document question answering.
+Uploaded documents are extracted, chunked, embedded and stored in a vector database.
+Redis is used for multi-turn conversational memory.
+Interview bookings require a candidate name, email, date and time.

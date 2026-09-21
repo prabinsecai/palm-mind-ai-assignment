@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "palm-mind-ai-assignment"
+version = "1.0.0"
+description = "Production-ready FastAPI RAG hiring assignment backend"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.34,<1",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  "sqlalchemy[asyncio]>=2.0.36,<3",
+  "asyncpg>=0.30,<1",
+  "alembic>=1.14,<2",
+  "redis[hiredis]>=5.2,<7",
+  "qdrant-client>=1.13,<2",
+  "openai>=1.68,<2",
+  "pypdf>=5.1,<6",
+  "python-multipart>=0.0.20,<1",
+  "email-validator>=2.2,<3",
+  "httpx>=0.28,<1",
+  "tenacity>=9,<10",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.3,<9", "pytest-asyncio>=0.25,<1", "anyio>=4.8,<5"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
