@@ -26,11 +26,30 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8.3,<9", "pytest-asyncio>=0.25,<1", "anyio>=4.8,<5"]
+test = [
+  "pytest>=8.3,<9",
+  "pytest-asyncio>=0.25,<1",
+  "anyio>=4.8,<5",
+  "ruff>=0.9,<1",
+  "mypy>=1.14,<2",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["app"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]

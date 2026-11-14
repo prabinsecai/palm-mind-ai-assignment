@@ -1,41 +1,74 @@
 import re
 from dataclasses import dataclass
 
+from app.core.config import get_settings
+
+
 @dataclass(frozen=True)
 class Chunk:
     index: int
     text: str
 
-def fixed_chunks(text: str, size: int = 1000, overlap: int = 150) -> list[Chunk]:
-    if size <= overlap: raise ValueError("chunk size must be greater than overlap")
-    chunks=[]; start=0; idx=0
+
+def _chunk_settings(size: int | None, overlap: int | None) -> tuple[int, int]:
+    settings = get_settings()
+    chunk_size = settings.chunk_size if size is None else size
+    chunk_overlap = settings.chunk_overlap if overlap is None else overlap
+    if chunk_size <= 0 or chunk_overlap < 0 or chunk_overlap >= chunk_size:
+        raise ValueError("chunk size must be positive and greater than a non-negative overlap")
+    return chunk_size, chunk_overlap
+
+
+def _windows(text: str, size: int, overlap: int) -> list[Chunk]:
+    chunks: list[Chunk] = []
+    start = 0
     while start < len(text):
-        piece=text[start:start+size].strip()
-        if piece: chunks.append(Chunk(idx,piece)); idx += 1
-        start += size-overlap
+        end = min(start + size, len(text))
+        chunks.append(Chunk(len(chunks), text[start:end]))
+        if end == len(text):
+            break
+        start = end - overlap
     return chunks
 
-def recursive_chunks(text: str, size: int = 1000, overlap: int = 150) -> list[Chunk]:
-    paragraphs=[p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
-    raw=[]; current=""
-    for p in paragraphs:
-        if len(p) <= size and len(current)+len(p)+2 <= size:
-            current = f"{current}\n\n{p}".strip()
-        else:
-            if current: raw.append(current)
-            if len(p) <= size: current=p
-            else:
-                raw.extend([c.text for c in fixed_chunks(p,size,overlap)])
-                current=""
-    if current: raw.append(current)
-    # apply overlap between semantic chunks while retaining boundaries
-    out=[]
-    for i, item in enumerate(raw):
-        if i and overlap:
-            prefix=raw[i-1][-overlap:]
-            item=f"{prefix}\n{item}"[:size]
-        out.append(Chunk(i,item.strip()))
-    return out
+
+def fixed_chunks(
+    text: str,
+    size: int | None = None,
+    overlap: int | None = None,
+) -> list[Chunk]:
+    chunk_size, chunk_overlap = _chunk_settings(size, overlap)
+    return _windows(text, chunk_size, chunk_overlap)
+
+
+def recursive_chunks(
+    text: str,
+    size: int | None = None,
+    overlap: int | None = None,
+) -> list[Chunk]:
+    chunk_size, chunk_overlap = _chunk_settings(size, overlap)
+    if not text:
+        return []
+
+    chunks: list[Chunk] = []
+    start = 0
+    while start < len(text):
+        end = min(start + chunk_size, len(text))
+        if end < len(text):
+            boundaries = [
+                match.end()
+                for match in re.finditer(r"\n\s*\n", text[start:end])
+                if match.end() > chunk_size - chunk_overlap
+            ]
+            if boundaries:
+                end = start + boundaries[-1]
+        chunks.append(Chunk(len(chunks), text[start:end]))
+        if end == len(text):
+            break
+        start = end - chunk_overlap
+    return chunks
+
 
 def make_chunks(text: str, strategy: str) -> list[Chunk]:
-    return fixed_chunks(text) if strategy == "fixed" else recursive_chunks(text)
+    if strategy == "fixed":
+        return fixed_chunks(text)
+    return recursive_chunks(text)

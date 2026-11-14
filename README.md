@@ -23,6 +23,7 @@ Production-ready FastAPI backend implementing the requested Palm Mind AI hiring 
 * **Redis Conversation Memory**
 
   * Session-based conversation history
+  * Per-session interview booking drafts
   * Configurable TTL
   * Bounded conversation history
 
@@ -84,7 +85,7 @@ Embedding Generation
    |
    +---------------------> Qdrant Vector Database
    |
-   +---------------------> PostgreSQL Metadata
+   +---------------------> PostgreSQL Document Metadata
 
 
 Chat Request
@@ -109,10 +110,10 @@ LLM Response
 Booking Request
    |
    v
-LLM Structured Extraction
+LLM Structured Extraction + Redis Booking Draft
    |
    v
-Pydantic Validation
+Validate and Request Missing Details
    |
    v
 PostgreSQL Booking Persistence
@@ -157,7 +158,8 @@ Windows PowerShell:
 Copy-Item .env.example .env
 ```
 
-Set the required LLM provider credentials in `.env`.
+Set `OPENAI_API_KEY` in `.env`. The default endpoint is OpenAI; set
+`OPENAI_BASE_URL` only when using an OpenAI-compatible provider.
 
 Do not commit `.env` or expose API credentials in source control.
 
@@ -219,7 +221,7 @@ curl -X POST http://localhost:8000/api/v1/documents/ingest \
 
 The response returns the document ID and the number of chunks created.
 
-The extracted document content is embedded and stored in Qdrant, while document and chunk metadata are persisted in PostgreSQL.
+Document metadata (including the chunk count and selected chunking strategy) is stored in PostgreSQL. Chunk text and its retrieval payload are stored in Qdrant; chunk text and chunk metadata are not stored in PostgreSQL.
 
 ## API 2 — Conversational RAG
 
@@ -258,17 +260,19 @@ Interview booking is handled through the same chat endpoint.
 ```json
 {
   "session_id": "candidate-001",
-  "message": "Please book my interview. My name is Jane Doe, email jane@example.com, on 2026-10-01 at 10:30."
+  "message": "Please book my interview. My name is Jane Doe, email jane@example.com, on 2026-12-01 at 10:30."
 }
 ```
 
 The system:
 
-1. Detects booking intent
-2. Extracts candidate details
-3. Validates the extracted values
-4. Persists the validated booking in PostgreSQL
-5. Returns the booking information
+1. Detects booking intent and extracts any details from each turn using the conversation history.
+2. Stores collected name, email, date and time in a Redis draft scoped to the session. The draft
+   expires using `CHAT_MEMORY_TTL_SECONDS`.
+3. Validates provided fields and asks only for fields that are missing or invalid. Relative dates
+   are resolved using the current date.
+4. Persists the booking in PostgreSQL when all fields are valid, clears the Redis draft, and returns
+   the booking information and ID.
 
 Required booking fields:
 
@@ -277,7 +281,15 @@ Required booking fields:
 * Date
 * Time
 
-The system does not invent missing booking information. If required fields are missing, the candidate is asked to provide them.
+The system does not invent missing booking information. If a booking draft exists, later turns
+continue that booking even when the candidate does not repeat the word “book.”
+
+## Configuration
+
+The default chat and embedding models are `gpt-4o-mini` and `text-embedding-3-small`, with
+`EMBEDDING_DIMENSIONS=1536`. `OPENAI_BASE_URL` is optional and should be left unset when using
+the official OpenAI endpoint. Chunk size and overlap are controlled by `CHUNK_SIZE` and
+`CHUNK_OVERLAP`.
 
 ## Local Development
 
@@ -346,7 +358,7 @@ pytest -q
 Current local verification:
 
 ```text
-8 passed
+16 passed
 ```
 
 The test suite uses dependency overrides for external services and does not require live LLM, Qdrant, Redis or PostgreSQL services for the automated API tests.
